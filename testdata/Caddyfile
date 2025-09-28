@@ -1,0 +1,14 @@
+{
+	debug
+	frankenphp
+	grpc {
+		address :50051
+	}
+}
+
+localhost {
+	route {
+		grpc
+    file_server
+	}
+}
