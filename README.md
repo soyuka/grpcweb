@@ -10,41 +10,42 @@ Largly inspired from:
 
 ## Usage
 
-Wrap the `grpcweb.Handler` around your existing gRPC backend handler (e.g., a reverse proxy).
+The library provides a standard http.Handler that can be used as middleware to wrap your gRPC backend (e.g., a reverse proxy). It will automatically translate gRPC-Web requests on the fly.
 
 ### Example within a Caddy Module:
 
+This example shows how to create a Caddy middleware that uses this library to enable gRPC-Web for a `reverse_proxy`.
+
+```go
 package mymodule
 
 import (
     "net/http"
-    "net/http/httputil"
-    "net/url"
 
     "github.com/caddyserver/caddy/v2/modules/caddyhttp"
     "github.com/soyuka/grpcweb"
 )
 
-// MyHandler is a Caddy HTTP handler.
-type MyHandler struct {
-    // ... other fields
-}
+// MyHandler is a Caddy HTTP handler that enables gRPC-Web.
+type MyHandler struct {}
 
 func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-    // This is just an example; in reality, the `next` handler
-    // would be the reverse_proxy to the gRPC server.
-    backendURL, _ := url.Parse("http://localhost:50051")
-    proxy := httputil.NewSingleHostReverseProxy(backendURL)
-
-    // Wrap the proxy with the gRPC-Web handler.
-    grpcwebWrapper := &grpcweb.Handler{
-        GRPCServer: proxy,
+    // Check if the request is a gRPC-Web request.
+    if grpcweb.IsGRPCWebRequest(r) {
+        // If it is, wrap the next handler (the reverse_proxy to the gRPC server)
+        // with our translator handler.
+        grpcwebWrapper := &grpcweb.Handler{
+            GRPCServer: next,
+        }
+        grpcwebWrapper.ServeHTTP(w, r)
+        return nil // The request has been handled.
     }
 
-    // The wrapper will handle the request if it's gRPC-Web.
-    grpcwebWrapper.ServeHTTP(w, r)
-
-    return nil
+    // If it's not a gRPC-Web request, pass it through unmodified.
+    return next.ServeHTTP(w, r)
 }
+```
+
+This pattern ensures that only gRPC-Web requests are processed by our translator, while native gRPC and other HTTP requests are passed through untouched.
 
 See also [./testdata](/testdata/README.md).
